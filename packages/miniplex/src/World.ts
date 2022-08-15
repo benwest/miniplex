@@ -101,6 +101,10 @@ export class World<T extends IEntity = UntypedEntity> {
     }
   }
 
+  private managesEntity(entity: T): entity is RegisteredEntity<T> {
+    return "__miniplex" in entity && entity.__miniplex.world === this
+  }
+
   /* MUTATION FUNCTIONS */
 
   private unregisterEntity = (entity: RegisteredEntity<T>) => {
@@ -136,8 +140,10 @@ export class World<T extends IEntity = UntypedEntity> {
     return registeredEntity
   }
 
-  public destroyEntity = (entity: RegisteredEntity<T>) => {
-    if (entity.__miniplex?.world !== this) return
+  public destroyEntity = (entity: T) => {
+    if (!this.managesEntity(entity)) {
+      throw `Tried to destroy an entity that is not managed by this world.`
+    }
 
     /* Remove it from our global list of entities */
     this.entities[entity.__miniplex.id] = null
@@ -151,12 +157,9 @@ export class World<T extends IEntity = UntypedEntity> {
     this.unregisterEntity(entity)
   }
 
-  public addComponent = (
-    entity: RegisteredEntity<T>,
-    ...partials: Partial<T>[]
-  ) => {
+  public addComponent = (entity: T, ...partials: Partial<T>[]) => {
     /* Sanity check */
-    if (entity.__miniplex?.world !== this) {
+    if (!this.managesEntity(entity)) {
       throw `Tried to add components to an entity that is not managed by this world.`
     }
 
@@ -177,11 +180,8 @@ export class World<T extends IEntity = UntypedEntity> {
     this.indexEntity(entity)
   }
 
-  public removeComponent = (
-    entity: RegisteredEntity<T>,
-    ...components: ComponentName<T>[]
-  ) => {
-    if (entity.__miniplex?.world !== this) {
+  public removeComponent = (entity: T, ...components: ComponentName<T>[]) => {
+    if (!this.managesEntity(entity)) {
       throw `Tried to remove ${components} from an entity that is not managed by this world.`
     }
 
@@ -210,20 +210,15 @@ export class World<T extends IEntity = UntypedEntity> {
       this.queuedCommands.add(() => this.createEntity(entity))
     },
 
-    destroyEntity: (entity: RegisteredEntity<T> | T) => {
-      this.queuedCommands.add(() =>
-        this.destroyEntity(entity as RegisteredEntity<T>)
-      )
+    destroyEntity: (entity: T) => {
+      this.queuedCommands.add(() => this.destroyEntity(entity))
     },
 
-    addComponent: (entity: RegisteredEntity<T>, ...partials: Partial<T>[]) => {
+    addComponent: (entity: T, ...partials: Partial<T>[]) => {
       this.queuedCommands.add(() => this.addComponent(entity, ...partials))
     },
 
-    removeComponent: (
-      entity: RegisteredEntity<T>,
-      ...names: ComponentName<T>[]
-    ) => {
+    removeComponent: (entity: T, ...names: ComponentName<T>[]) => {
       this.queuedCommands.add(() => this.removeComponent(entity, ...names))
     },
 
